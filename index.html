@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HF Radio Propagation & The Ionosphere (Step 5)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar containing lessons, controls and telemetry -->
+        <aside class="sidebar">
+            <header class="app-header">
+                <div class="step-badge">Step 5: The Ionosphere</div>
+                <h1>HF Radio Propagation</h1>
+                <p class="subtitle">Interactive Physics Visualizer & Learning Lab</p>
+            </header>
+
+            <!-- Navigation Tabs for Lessons -->
+            <nav class="lesson-tabs">
+                <button class="tab-btn active" id="tab-btn-simulator" onclick="switchTab('simulator')">Simulator Controls</button>
+                <button class="tab-btn" id="tab-btn-guide" onclick="switchTab('guide')">Ionosphere Guide</button>
+            </nav>
+
+            <div class="tab-content" id="simulator-tab">
+                <!-- Simulation Controls Section -->
+                <section class="control-panel card animate-fade-in">
+                    <h2 class="section-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Transmission Parameters
+                    </h2>
+
+                    <!-- Time of Day (Diurnal Cycle) -->
+                    <div class="control-group">
+                        <label>Time of Day (Diurnal Cycle)</label>
+                        <div class="toggle-group">
+                            <button id="day-btn" class="toggle-btn active" onclick="setTimeOfDay('day')">
+                                <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                                Daytime (D, E, F1, F2)
+                            </button>
+                            <button id="night-btn" class="toggle-btn" onclick="setTimeOfDay('night')">
+                                <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                                Nighttime (F Layer Only)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Frequency Slider -->
+                    <div class="control-group">
+                        <div class="label-val">
+                            <label for="freq-slider">Frequency</label>
+                            <span class="value-display" id="freq-val">14.0 MHz</span>
+                        </div>
+                        <input type="range" id="freq-slider" min="2" max="30" step="0.5" value="14">
+                        <div class="slider-marks">
+                            <span>2 MHz</span>
+                            <span>14 MHz</span>
+                            <span>30 MHz</span>
+                        </div>
+                    </div>
+
+                    <!-- Elevation Angle Slider -->
+                    <div class="control-group">
+                        <div class="label-val">
+                            <label for="angle-slider">Elevation Angle</label>
+                            <span class="value-display" id="angle-val">30°</span>
+                        </div>
+                        <input type="range" id="angle-slider" min="5" max="85" step="1" value="30">
+                        <div class="slider-marks">
+                            <span>5° (Low)</span>
+                            <span>45°</span>
+                            <span>85° (Steep)</span>
+                        </div>
+                    </div>
+
+                    <!-- Solar Cycle Slider -->
+                    <div class="control-group">
+                        <div class="label-val">
+                            <label for="solar-slider">Solar Cycle Activity</label>
+                            <span class="value-display" id="solar-val">Medium (SSN 70)</span>
+                        </div>
+                        <input type="range" id="solar-slider" min="10" max="200" step="10" value="70">
+                        <div class="slider-marks">
+                            <span>Low (Solar Min)</span>
+                            <span>High (Solar Max)</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Live Diagnostics/Telemetry -->
+                <section class="telemetry-panel card animate-fade-in">
+                    <h2 class="section-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        Propagation Telemetry
+                    </h2>
+                    
+                    <div class="telemetry-grid">
+                        <div class="telemetry-item full-width">
+                            <div class="tel-label">Signal Outcome</div>
+                            <div class="tel-value outcome-value" id="signal-outcome">Analyzing...</div>
+                            <div class="tel-desc" id="outcome-desc">Waves are refracting.</div>
+                        </div>
+
+                        <div class="telemetry-item">
+                            <div class="tel-label">Refracting Layer</div>
+                            <div class="tel-value" id="refracting-layer">F2 Layer</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="tel-label">Skip Distance</div>
+                            <div class="tel-value" id="skip-distance">-- km</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="tel-label">Critical Frequency</div>
+                            <div class="tel-value" id="crit-freq">-- MHz</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="tel-label">Max Usable Freq (MUF)</div>
+                            <div class="tel-valueHighlight" id="muf-val">-- MHz</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-content hidden" id="guide-tab">
+                <!-- Ionosphere educational content -->
+                <section class="guide-panel animate-fade-in">
+                    <div class="guide-intro">
+                        <h3>Understanding Step 5: The Ionosphere</h3>
+                        <p>The ionosphere is a region of the upper atmosphere (about 50 to 1000 km) heavily ionized by solar radiation. This gas behaves as a giant plasma shell, refracting (bending) HF radio waves back to Earth.</p>
+                    </div>
+
+                    <!-- Interactive layer guides -->
+                    <div class="layer-selector-list">
+                        <div class="layer-card" id="layer-card-D" onclick="highlightLayer('D')">
+                            <div class="layer-card-header">
+                                <span class="layer-badge badge-d">D Layer</span>
+                                <span class="layer-alt">50 – 90 km</span>
+                            </div>
+                            <p><strong>The Sponge:</strong> Dominated by dense air particles. It does not refract signals; instead, it <em>absorbs</em> low-frequency HF waves. It completely disappears at night as recombination takes place rapidly.</p>
+                        </div>
+
+                        <div class="layer-card" id="layer-card-E" onclick="highlightLayer('E')">
+                            <div class="layer-card-header">
+                                <span class="layer-badge badge-e">E Layer</span>
+                                <span class="layer-alt">90 – 140 km</span>
+                            </div>
+                            <p><strong>Medium Refractor:</strong> Highly active during the day. Bends medium-frequency waves. At night, it weakens drastically but occasionally supports "Sporadic E" propagation.</p>
+                        </div>
+
+                        <div class="layer-card" id="layer-card-F1" onclick="highlightLayer('F1')">
+                            <div class="layer-card-header">
+                                <span class="layer-badge badge-f1">F1 Layer</span>
+                                <span class="layer-alt">140 – 210 km</span>
+                            </div>
+                            <p><strong>Daytime Split:</strong> Forms only during daylight. Works in conjunction with the F2 layer. Merges back with F2 as the sun sets.</p>
+                        </div>
+
+                        <div class="layer-card" id="layer-card-F2" onclick="highlightLayer('F2')">
+                            <div class="layer-card-header">
+                                <span class="layer-badge badge-f2">F2 Layer</span>
+                                <span class="layer-alt">> 210 km</span>
+                            </div>
+                            <p><strong>Long-Distance Engine:</strong> The highest and most ionized layer. Responsible for the longest skip communication (DX). Stays active 24/7 (merging into a single F layer at night).</p>
+                        </div>
+                    </div>
+
+                    <!-- Critical Concepts -->
+                    <div class="concept-card card">
+                        <h4>Key Frequency Rules:</h4>
+                        <ul>
+                            <li><strong>Critical Frequency ($f_c$):</strong> The absolute highest frequency that returns if sent straight up (90°). Higher than this penetrates into space.</li>
+                            <li><strong>MUF (Maximum Usable Frequency):</strong> The maximum frequency that returns at a given angle. If you transmit above MUF, your wave escapes.</li>
+                            <li><strong>LUF (Lowest Usable Frequency):</strong> The minimum frequency needed to pierce the absorbing D-layer without being completely lost.</li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </aside>
+
+        <!-- Main Visualizer Area -->
+        <main class="visualizer-container">
+            <!-- Floating overlay legend and status indicators -->
+            <div class="visualizer-overlay top-left">
+                <div class="overlay-title">Ionosphere Propagation Lab</div>
+                <div class="overlay-stats">
+                    <span class="dot-indicator pulse-green"></span>
+                    <span id="visualizer-status">Simulation Active</span>
+                </div>
+            </div>
+
+            <div class="visualizer-overlay top-right">
+                <div class="legend">
+                    <div class="legend-item"><span class="legend-color ray-path"></span>TX Radio Wave</div>
+                    <div class="legend-item"><span class="legend-color earth-crust"></span>Earth Surface</div>
+                    <div class="legend-item"><span class="legend-color iono-d"></span>D-Layer (Absorber)</div>
+                    <div class="legend-item"><span class="legend-color iono-e"></span>E-Layer</div>
+                    <div class="legend-item"><span class="legend-color iono-f"></span>F/F2-Layer</div>
+                </div>
+            </div>
+
+            <!-- Canvas wrapper to handle scaling and click coordinates -->
+            <div class="canvas-wrapper">
+                <canvas id="simulation-canvas"></canvas>
+            </div>
+
+            <!-- Interactive instructions at bottom -->
+            <div class="visualizer-footer">
+                <p><kbd>Click & Drag</kbd> on the map to place the receiver station and check coverage. Click anywhere to adjust transmission distance.</p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
