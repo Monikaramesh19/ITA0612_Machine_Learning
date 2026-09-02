@@ -1,0 +1,230 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
+from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+                              f1_score, confusion_matrix, classification_report)
+from sklearn.preprocessing import LabelEncoder
+
+np.random.seed(42)
+
+# ============================================================
+# 1. DATASET GENERATION (Task A)
+# ============================================================
+N = 600
+temperature = np.random.normal(70, 12, N).clip(35, 120)
+vibration = np.random.gamma(shape=2.0, scale=1.1, size=N).clip(0.1, 12)
+rot_speed = np.random.normal(1500, 220, N).clip(600, 2200)
+torque = np.random.normal(45, 12, N).clip(5, 90)
+pressure = np.random.normal(6.5, 1.8, N).clip(1, 14)
+operating_hours = np.random.exponential(scale=900, size=N).clip(5, 6000)
+
+df = pd.DataFrame({
+    "Temperature_C": temperature.round(1),
+    "Vibration_mm_s": vibration.round(2),
+    "Rotational_Speed_RPM": rot_speed.round(0).astype(int),
+    "Torque_Nm": torque.round(1),
+    "Pressure_bar": pressure.round(2),
+    "Operating_Hours": operating_hours.round(0).astype(int),
+})
+
+def risk_score(row):
+    score = 0
+    score += (row.Temperature_C - 70) / 12
+    score += (row.Vibration_mm_s - 2.2) / 1.5
+    score += (row.Operating_Hours - 900) / 900
+    score += (row.Torque_Nm - 45) / 20
+    score += (abs(row.Rotational_Speed_RPM - 1500) - 200) / 300
+    score += (abs(row.Pressure_bar - 6.5) - 1.5) / 2
+    return score
+
+df["_score"] = df.apply(risk_score, axis=1) + np.random.normal(0, 0.6, N)
+
+def label(s):
+    if s < 0.15:
+        return "Normal Operation"
+    elif s < 1.4:
+        return "Preventive Maintenance Required"
+    else:
+        return "Failure Risk"
+
+df["Machine_Condition"] = df["_score"].apply(label)
+df = df.drop(columns=["_score"])
+
+for col, frac in [("Vibration_mm_s", 0.02), ("Pressure_bar", 0.015)]:
+    idx = np.random.choice(df.index, size=int(frac * N), replace=False)
+    df.loc[idx, col] = np.nan
+
+df.insert(0, "Equipment_ID", ["EQ" + str(i).zfill(4) for i in range(1, N + 1)])
+df.to_csv("predictive_maintenance_raw.csv", index=False)
+
+print("Dataset shape:", df.shape)
+print(df["Machine_Condition"].value_counts())
+print("\nMissing values:\n", df.isna().sum())
+df.head()
+
+# ============================================================
+# 2. PREPROCESSING
+# ============================================================
+ATTRIBUTES = ["Temperature_C", "Vibration_mm_s", "Rotational_Speed_RPM",
+              "Torque_Nm", "Pressure_bar", "Operating_Hours"]
+TARGET = "Machine_Condition"
+
+df_clean = df.drop(columns=["Equipment_ID"]).copy()
+for c in ATTRIBUTES:
+    df_clean[c] = df_clean[c].fillna(df_clean[c].median())
+
+le = LabelEncoder()
+y_all = le.fit_transform(df_clean[TARGET])
+X_all = df_clean[ATTRIBUTES]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_all, y_all, test_size=0.25, random_state=42, stratify=y_all)
+
+print("\nClasses:", list(le.classes_))
+print("Train:", X_train.shape, " Test:", X_test.shape)
+
+# ============================================================
+# 3. ENTROPY / INFORMATION GAIN (Task B)
+# ============================================================
+def entropy(labels):
+    _, counts = np.unique(labels, return_counts=True)
+    p = counts / counts.sum()
+    return -np.sum(p * np.log2(p))
+
+def best_information_gain(x, y, n_candidates=50):
+    base = entropy(y)
+    order = np.argsort(x)
+    xs = x.values[order]
+    cand = np.unique((xs[:-1] + xs[1:]) / 2)
+    if len(cand) > n_candidates:
+        idx = np.linspace(0, len(cand) - 1, n_candidates).astype(int)
+        cand = cand[idx]
+    best_gain, best_t = -1, None
+    n = len(y)
+    for t in cand:
+        left = x <= t
+        right = ~left
+        if left.sum() == 0 or right.sum() == 0:
+            continue
+        gain = base - ((left.sum() / n) * entropy(y[left]) +
+                        (right.sum() / n) * entropy(y[right]))
+        if gain > best_gain:
+            best_gain, best_t = gain, t
+    return best_gain, best_t
+
+root_h = entropy(y_all)
+print(f"\nRoot entropy H(Machine_Condition) = {root_h:.4f} bits\n")
+
+rows = []
+for attr in ATTRIBUTES:
+    gain, thresh = best_information_gain(df_clean[attr], y_all)
+    rows.append((attr, thresh, gain))
+rows.sort(key=lambda r: r[2], reverse=True)
+
+ig_df = pd.DataFrame(rows, columns=["Attribute", "Best_Threshold", "Information_Gain"])
+print(ig_df)
+
+# ============================================================
+# 4. OVERFITTING / UNDERFITTING ANALYSIS (Task E)
+# ============================================================
+depths = range(1, 16)
+train_acc, test_acc = [], []
+for d in depths:
+    clf = DecisionTreeClassifier(criterion="entropy", max_depth=d, random_state=42)
+    clf.fit(X_train, y_train)
+    train_acc.append(accuracy_score(y_train, clf.predict(X_train)))
+    test_acc.append(accuracy_score(y_test, clf.predict(X_test)))
+
+plt.figure(figsize=(7, 5))
+plt.plot(depths, train_acc, marker="o", label="Training accuracy")
+plt.plot(depths, test_acc, marker="s", label="Testing accuracy")
+plt.xlabel("Decision Tree max_depth")
+plt.ylabel("Accuracy")
+plt.title("Overfitting / Underfitting Analysis: Accuracy vs. Tree Depth")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+best_test = max(test_acc)
+best_depth = min(d for d, t in zip(depths, test_acc) if t == best_test)
+print(f"Best test accuracy = {best_test:.4f} at max_depth = {best_depth}")
+
+# ============================================================
+# 5. TRAIN FINAL DECISION TREE (Task C)
+# ============================================================
+final_clf = DecisionTreeClassifier(criterion="entropy", max_depth=best_depth,
+                                    min_samples_leaf=6, random_state=42)
+final_clf.fit(X_train, y_train)
+
+print(f"\ncriterion=entropy, max_depth={best_depth}, min_samples_leaf=6")
+print(f"Leaves: {final_clf.get_n_leaves()}   Depth: {final_clf.get_depth()}")
+
+plt.figure(figsize=(22, 11))
+plot_tree(final_clf, feature_names=ATTRIBUTES, class_names=le.classes_,
+          filled=True, rounded=True, fontsize=9)
+plt.title(f"Decision Tree (criterion=entropy, max_depth={best_depth})", fontsize=14)
+plt.show()
+
+print("\nDecision Tree rules:\n")
+print(export_text(final_clf, feature_names=ATTRIBUTES))
+
+# ============================================================
+# 6. MODEL EVALUATION (Task D)
+# ============================================================
+y_pred = final_clf.predict(X_test)
+
+acc = accuracy_score(y_test, y_pred)
+prec = precision_score(y_test, y_pred, average="macro")
+rec = recall_score(y_test, y_pred, average="macro")
+f1 = f1_score(y_test, y_pred, average="macro")
+
+print(f"\nAccuracy           : {acc:.4f}")
+print(f"Precision (macro)  : {prec:.4f}")
+print(f"Recall (macro)     : {rec:.4f}")
+print(f"F1-score (macro)   : {f1:.4f}\n")
+print(classification_report(y_test, y_pred, target_names=le.classes_))
+
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(6, 5))
+im = plt.imshow(cm, cmap="Blues")
+plt.colorbar(im, fraction=0.046, pad=0.04)
+plt.xticks(range(len(le.classes_)), le.classes_, rotation=25, ha="right")
+plt.yticks(range(len(le.classes_)), le.classes_)
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, str(cm[i, j]), ha="center", va="center",
+                  color="white" if cm[i, j] > cm.max() / 2 else "black")
+plt.xlabel("Predicted label")
+plt.ylabel("Actual label")
+plt.title("Confusion Matrix - Decision Tree (Test Set)")
+plt.tight_layout()
+plt.show()
+
+importances = pd.Series(final_clf.feature_importances_, index=ATTRIBUTES).sort_values()
+plt.figure(figsize=(7, 5))
+importances.plot(kind="barh", color="#3b6fb6")
+plt.xlabel("Importance (normalized information gain)")
+plt.title("Feature Importance - Decision Tree")
+plt.tight_layout()
+plt.show()
+print(importances.sort_values(ascending=False))
+
+# ============================================================
+# 7. PREDICT ON A NEW EQUIPMENT READING
+# ============================================================
+new_reading = {
+    "Temperature_C": 88.0,
+    "Vibration_mm_s": 5.1,
+    "Rotational_Speed_RPM": 1550,
+    "Torque_Nm": 52.0,
+    "Pressure_bar": 6.8,
+    "Operating_Hours": 2100,
+}
+row = pd.DataFrame([new_reading])[ATTRIBUTES]
+pred = final_clf.predict(row)[0]
+proba = final_clf.predict_proba(row)[0]
+print("\nPredicted Machine_Condition:", le.inverse_transform([pred])[0])
+for cls, p in zip(le.classes_, proba):
+    print(f"  P({cls}) = {p:.3f}")
